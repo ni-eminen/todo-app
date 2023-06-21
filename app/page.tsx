@@ -1,34 +1,44 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { v4 as uuidv4 } from "uuid";
 
-const TodoWindow = ({
-  header,
-  notes,
-  onSelect,
-}: {
+interface Note {
+  body: string;
+  id: string;
+  timestamp: number;
+  category: string;
+  selected: boolean;
+}
+
+interface TodoWindowProps {
   header: string;
-  notes: string[];
-  onSelect: (str: string) => void;
-}) => {
+  notes: Note[];
+  onSelect: (str: Note) => void;
+}
+
+const TodoWindow = ({ header, notes, onSelect }: TodoWindowProps) => {
   return (
-    <div className="bg-blue-400 rounded-lg m-3 p-5">
+    <div className="bg-blue-400 overflow-scroll w-1/2 rounded-lg m-3 p-5">
       <h1 className="text-2xl mb-2">{header}</h1>
       <div className="mb-4">
-        {notes.map((str: string) => {
+        {notes.map((note: Note) => {
           return (
-            <div key={str} className="flex items-center my-2">
+            <div key={note.id} className="flex items-center my-2 first-letter">
               <input
-                onChange={() => onSelect(str)}
-                id="default-checkbox"
+                onChange={() => onSelect(note)}
+                id={note.id}
                 type="checkbox"
-                value={str}
+                value={note.id}
                 className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
               />
               <label
+                onSelect={() => onSelect(note)}
                 htmlFor="default-checkbox"
-                className="ml-2 text-sm font-medium text-white"
+                className={`ml-2 text-sm font-medium text-white line-through ${
+                  note.selected ? "line-through" : ""
+                }`}
               >
-                {str}
+                {note.body}
               </label>
             </div>
           );
@@ -40,28 +50,29 @@ const TodoWindow = ({
 
 export default function Home() {
   const [input, setInput] = useState("");
-  const [todoNotes, setTodoNotes] = useState<string[]>([]);
-  const [dailyNotes, setDailyNotes] = useState<string[]>([]);
-  const [generalNotes, setGeneralNotes] = useState<string[]>([]);
-  const [yesterdayNotes, setYesterdayNotes] = useState<string[]>([]);
+  const [notes, setNotes] = useState<Note[]>([]);
+
+  useEffect(() => {
+    const checkTimestamps = setInterval(() => {}, 10000);
+    return () => clearInterval(checkTimestamps);
+  }, []);
 
   const processInput = () => {
     const code = input.slice(0, 2);
-    const note = input.slice(2, input.length);
-    switch (code) {
-      case "/t":
-        setTodoNotes([...todoNotes, note]);
-        break;
-      case "/d":
-        setDailyNotes([...dailyNotes, note]);
-        break;
-      case "/g":
-        setGeneralNotes([...generalNotes, note]);
-        break;
-      case "/y":
-        setYesterdayNotes([...yesterdayNotes, note]);
-        break;
-    }
+    const body = input.slice(2, input.length);
+
+    const newNote = {
+      body: body,
+      id: uuidv4(),
+      timestamp: Date.now(),
+      category: code,
+      selected: false,
+    };
+
+    setNotes([...notes, newNote]);
+
+    console.log(newNote);
+
     setInput("");
   };
 
@@ -71,47 +82,38 @@ export default function Home() {
     }
   };
 
-  const removeTodo = (note: string) => {
-    console.log("remove todo");
-    setTodoNotes(todoNotes.filter((x) => x !== note));
+  const removeNote = (note: Note) => {
+    setNotes(notes.filter((x) => x.id !== note.id));
   };
 
-  const removeDaily = (note: string) => {
-    setDailyNotes(dailyNotes.filter((x) => x !== note));
+  const toggleNote = (selectedNote: Note) => {
+    setNotes(
+      notes.map((note) => {
+        return note.id == selectedNote.id
+          ? { ...note, selected: !note.selected }
+          : note;
+      })
+    );
   };
 
-  const removeYesterday = (note: string) => {
-    setYesterdayNotes(yesterdayNotes.filter((x) => x !== note));
+  const getNotes = (category: string) => {
+    return notes.filter((note) => note.category == category);
   };
 
-  const removeGeneral = (note: string) => {
-    setGeneralNotes(generalNotes.filter((x) => x !== note));
-  };
+  const todoWindows: TodoWindowProps[] = [
+    { onSelect: toggleNote, notes: getNotes("/t"), header: "Todo:" },
+    { onSelect: toggleNote, notes: getNotes("/d"), header: "Daily:" },
+    { onSelect: toggleNote, notes: getNotes("/g"), header: "General:" },
+    { onSelect: toggleNote, notes: getNotes("/y"), header: "Yesterday:" },
+  ];
 
   return (
-    <main className="flex-col max-w-full min-h-full max-h-screen bg-blue-500">
-      <div className="flex-col grid grid-cols-1 h-screen">
-        <div className="grid grid-cols-2 min-w-screen bg-blue-500 justify-between">
-          <TodoWindow
-            onSelect={removeTodo}
-            notes={todoNotes}
-            header={"Todo:"}
-          ></TodoWindow>
-          <TodoWindow
-            onSelect={removeDaily}
-            notes={dailyNotes}
-            header={"Daily:"}
-          ></TodoWindow>
-          <TodoWindow
-            onSelect={removeGeneral}
-            notes={generalNotes}
-            header={"General:"}
-          ></TodoWindow>
-          <TodoWindow
-            onSelect={removeYesterday}
-            notes={yesterdayNotes}
-            header={"Yesterday:"}
-          ></TodoWindow>
+    <main className="flex-col max-w-full min-h-full max-h-screen">
+      <div className="flex-col max-h-screen h-screen overflow-hidden">
+        <div className="flex min-w-screen bg-blue-500 h-1/2">
+          {todoWindows.map((todoWindowProps) => (
+            <TodoWindow key={todoWindowProps.header} {...todoWindowProps} />
+          ))}
         </div>
         <div className="flex justify-center bg-blue-500">
           <input
