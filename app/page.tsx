@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 
 interface Note {
@@ -8,6 +8,7 @@ interface Note {
   timestamp: number;
   category: string;
   selected: boolean;
+  isYesterday: boolean;
 }
 
 interface TodoWindowProps {
@@ -34,8 +35,8 @@ const TodoWindow = ({ header, notes, onSelect }: TodoWindowProps) => {
               <label
                 onSelect={() => onSelect(note)}
                 htmlFor="default-checkbox"
-                className={`ml-2 text-sm font-medium text-white line-through ${
-                  note.selected ? "line-through" : ""
+                className={`ml-2 text-sm font-medium text-white ${
+                  note.selected ? "line-through text-blue-100" : ""
                 }`}
               >
                 {note.body}
@@ -52,10 +53,27 @@ export default function Home() {
   const [input, setInput] = useState("");
   const [notes, setNotes] = useState<Note[]>([]);
 
+  const timestampIsYesterday = (timestamp: number) => {
+    const today = new Date(Date.now());
+    const timestampAsDate = new Date(timestamp);
+
+    return today.getDate() - 1 == timestampAsDate.getDate();
+  };
+
+  const updateNotes = useCallback(() => {
+    setNotes(
+      notes.map((note) => {
+        return { ...note, isYesterday: timestampIsYesterday(note.timestamp) };
+      })
+    );
+  }, [notes]);
+
   useEffect(() => {
-    const checkTimestamps = setInterval(() => {}, 10000);
+    const checkTimestamps = setInterval(() => {
+      updateNotes();
+    }, 1000);
     return () => clearInterval(checkTimestamps);
-  }, []);
+  }, [notes, updateNotes]);
 
   const processInput = () => {
     const code = input.slice(0, 2);
@@ -67,12 +85,10 @@ export default function Home() {
       timestamp: Date.now(),
       category: code,
       selected: false,
+      isYesterday: false,
     };
 
     setNotes([...notes, newNote]);
-
-    console.log(newNote);
-
     setInput("");
   };
 
@@ -89,22 +105,30 @@ export default function Home() {
   const toggleNote = (selectedNote: Note) => {
     setNotes(
       notes.map((note) => {
-        return note.id == selectedNote.id
-          ? { ...note, selected: !note.selected }
-          : note;
+        const updatedNote =
+          note.id == selectedNote.id
+            ? { ...note, selected: !note.selected }
+            : note;
+        return updatedNote;
       })
     );
   };
 
   const getNotes = (category: string) => {
-    return notes.filter((note) => note.category == category);
+    return notes.filter(
+      (note) => note.category == category && !note.isYesterday && !note.selected
+    );
+  };
+
+  const getYesterdaysNotes = () => {
+    return notes.filter((note) => note.isYesterday);
   };
 
   const todoWindows: TodoWindowProps[] = [
     { onSelect: toggleNote, notes: getNotes("/t"), header: "Todo:" },
     { onSelect: toggleNote, notes: getNotes("/d"), header: "Daily:" },
     { onSelect: toggleNote, notes: getNotes("/g"), header: "General:" },
-    { onSelect: toggleNote, notes: getNotes("/y"), header: "Yesterday:" },
+    { onSelect: toggleNote, notes: getYesterdaysNotes(), header: "Yesterday:" },
   ];
 
   return (
