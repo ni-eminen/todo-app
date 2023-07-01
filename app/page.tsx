@@ -1,21 +1,9 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
-
-interface Note {
-  body: string;
-  id: string;
-  timestamp: number;
-  category: string;
-  selected: boolean;
-  isYesterday: boolean;
-}
-
-interface TodoWindowProps {
-  header: string;
-  notes: Note[];
-  onSelect: (str: Note) => void;
-}
+import { createNote, getNotes as fetchNotes } from "./services/dbService";
+import { Note, TodoWindowProps } from "./types";
+import { timestampIsYesterday } from "./utils/isYesterday";
 
 const TodoWindow = ({ header, notes, onSelect }: TodoWindowProps) => {
   return (
@@ -26,6 +14,7 @@ const TodoWindow = ({ header, notes, onSelect }: TodoWindowProps) => {
           return (
             <div key={note.id} className="flex items-center my-2 first-letter">
               <input
+                checked={note.selected}
                 onChange={() => onSelect(note)}
                 id={note.id}
                 type="checkbox"
@@ -53,13 +42,6 @@ export default function Home() {
   const [input, setInput] = useState("");
   const [notes, setNotes] = useState<Note[]>([]);
 
-  const timestampIsYesterday = (timestamp: number) => {
-    const today = new Date(Date.now());
-    const timestampAsDate = new Date(timestamp);
-
-    return today.getDate() - 1 == timestampAsDate.getDate();
-  };
-
   const updateNotes = useCallback(() => {
     setNotes(
       notes.map((note) => {
@@ -75,6 +57,14 @@ export default function Home() {
     return () => clearInterval(checkTimestamps);
   }, [notes, updateNotes]);
 
+  useEffect(() => {
+    const loadNotes = async () => {
+      const response = await fetchNotes();
+      setNotes(response);
+    };
+    loadNotes();
+  }, []);
+
   const processInput = () => {
     const code = input.slice(0, 2);
     const body = input.slice(2, input.length);
@@ -85,8 +75,9 @@ export default function Home() {
       timestamp: Date.now(),
       category: code,
       selected: false,
-      isYesterday: false,
     };
+
+    createNote(newNote);
 
     setNotes([...notes, newNote]);
     setInput("");
@@ -114,27 +105,48 @@ export default function Home() {
     );
   };
 
-  const getNotes = (category: string) => {
-    return notes.filter(
-      (note) => note.category == category && !note.isYesterday && !note.selected
-    );
-  };
+  const getNotes = useCallback(
+    (category: string) => {
+      return notes.filter(
+        (note) =>
+          note.category == category && !timestampIsYesterday(note.timestamp)
+      );
+    },
+    [notes]
+  );
 
-  const getYesterdaysNotes = () => {
-    return notes.filter((note) => note.isYesterday);
+  const useNotes = (fn: () => Note[]) => {
+    const notes = useMemo(() => fn(), [fn]);
+    return notes;
   };
 
   const todoWindows: TodoWindowProps[] = [
-    { onSelect: toggleNote, notes: getNotes("/t"), header: "Todo:" },
-    { onSelect: toggleNote, notes: getNotes("/d"), header: "Daily:" },
-    { onSelect: toggleNote, notes: getNotes("/g"), header: "General:" },
-    { onSelect: toggleNote, notes: getYesterdaysNotes(), header: "Yesterday:" },
+    {
+      onSelect: toggleNote,
+      notes: useNotes(() => getNotes("/t")),
+      header: "Todo:",
+    },
+    {
+      onSelect: toggleNote,
+      notes: useNotes(() => getNotes("/d")),
+      header: "Daily:",
+    },
+    {
+      onSelect: toggleNote,
+      notes: useNotes(() => getNotes("/g")),
+      header: "General:",
+    },
+    {
+      onSelect: toggleNote,
+      notes: useNotes(() => getNotes("/y")),
+      header: "Yesterday:",
+    },
   ];
 
   return (
-    <main className="flex-col max-w-full min-h-full max-h-screen">
+    <main className="flex-col max-w-full min-h-full max-h-screen bg-blue-500">
       <div className="flex-col max-h-screen h-screen overflow-hidden">
-        <div className="flex min-w-screen bg-blue-500 h-1/2">
+        <div className="flex min-w-scree h-1/2">
           {todoWindows.map((todoWindowProps) => (
             <TodoWindow key={todoWindowProps.header} {...todoWindowProps} />
           ))}
