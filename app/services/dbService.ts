@@ -13,6 +13,6 @@ export const createNote = async (newNote: Note): Promise<Note> => {
 }
 
 export const patchNote = async (patchedNote: Note): Promise<Note> => {
-    const response = await axios.patch('http://localhost:8080/notes', patchedNote)
+    const response = await axios.patch(`http://localhost:8080/notes/${patchedNote.id}`, patchedNote)
     return response.data
 }

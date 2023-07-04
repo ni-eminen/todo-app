@@ -10,4 +10,5 @@ export interface TodoWindowProps {
 header: string;
 notes: Note[];
 onSelect: (str: Note) => void;
+shorthand: string;
 }

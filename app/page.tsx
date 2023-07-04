@@ -1,38 +1,77 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
-import { createNote, getNotes as fetchNotes } from "./services/dbService";
+import {
+  createNote,
+  getNotes as fetchNotes,
+  patchNote,
+} from "./services/dbService";
 import { Note, TodoWindowProps } from "./types";
 import { timestampIsYesterday } from "./utils/isYesterday";
 
-const TodoWindow = ({ header, notes, onSelect }: TodoWindowProps) => {
+const NoteComponent = ({
+  note,
+  onSelect,
+}: {
+  note: Note;
+  onSelect: () => void;
+}) => {
+  const [bounceEffect, setBounceEffect] = useState(false);
+
+  return (
+    <div
+      className={`flex items-center my-2 first-letter bg-blue-500 rounded p-2 ${
+        bounceEffect && "animate-bounce"
+      } ${note.selected ? "bg-gradient-to-r from-blue-600 to-blue-500" : ""}`}
+      onAnimationEnd={() => setBounceEffect(false)}
+      onClick={() => {
+        setBounceEffect(true);
+        onSelect();
+      }}
+    >
+      <input
+        checked={note.selected}
+        onChange={onSelect}
+        id={note.id}
+        type="checkbox"
+        value={note.id}
+        className="w-8 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+      />
+      <label
+        onClick={onSelect}
+        htmlFor="default-checkbox"
+        className={`ml-2 text-sm font-medium text-white select-none ${
+          note.selected ? "line-through text-blue-300" : ""
+        }`}
+      >
+        {note.body}
+      </label>
+    </div>
+  );
+};
+
+const TodoWindow = ({
+  header,
+  notes,
+  onSelect,
+  shorthand,
+}: TodoWindowProps) => {
   return (
     <div className="bg-blue-400 overflow-scroll w-1/2 rounded-lg m-3 p-5">
-      <h1 className="text-2xl mb-2">{header}</h1>
+      <div className="flex justify-between">
+        <h1 className="text-2xl mb-2 select-none inline">{header}</h1>
+        <h1 className="bg-blue-500 rounded px-2 py-1 text-2xl mb-2 select-none inline justify-end align-bottom">
+          {shorthand}
+        </h1>{" "}
+      </div>
       <div className="mb-4">
-        {notes.map((note: Note) => {
-          return (
-            <div key={note.id} className="flex items-center my-2 first-letter">
-              <input
-                checked={note.selected}
-                onChange={() => onSelect(note)}
-                id={note.id}
-                type="checkbox"
-                value={note.id}
-                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
-              />
-              <label
-                onSelect={() => onSelect(note)}
-                htmlFor="default-checkbox"
-                className={`ml-2 text-sm font-medium text-white ${
-                  note.selected ? "line-through text-blue-100" : ""
-                }`}
-              >
-                {note.body}
-              </label>
-            </div>
-          );
-        })}
+        {notes.map((note: Note) => (
+          <NoteComponent
+            key={note.id}
+            onSelect={() => onSelect(note)}
+            note={note}
+          />
+        ))}
       </div>
     </div>
   );
@@ -53,6 +92,7 @@ export default function Home() {
   useEffect(() => {
     const checkTimestamps = setInterval(() => {
       updateNotes();
+      console.log(notes);
     }, 1000);
     return () => clearInterval(checkTimestamps);
   }, [notes, updateNotes]);
@@ -103,6 +143,7 @@ export default function Home() {
         return updatedNote;
       })
     );
+    patchNote({ ...selectedNote, selected: !selectedNote.selected });
   };
 
   const getNotes = useCallback(
@@ -125,33 +166,39 @@ export default function Home() {
       onSelect: toggleNote,
       notes: useNotes(() => getNotes("/t")),
       header: "Todo:",
+      shorthand: "/t",
     },
     {
       onSelect: toggleNote,
       notes: useNotes(() => getNotes("/d")),
       header: "Daily:",
+      shorthand: "/d",
     },
     {
       onSelect: toggleNote,
       notes: useNotes(() => getNotes("/g")),
       header: "General:",
+      shorthand: "/g",
     },
     {
       onSelect: toggleNote,
-      notes: useNotes(() => getNotes("/y")),
+      notes: useNotes(() =>
+        notes.filter((note) => timestampIsYesterday(note.timestamp))
+      ),
       header: "Yesterday:",
+      shorthand: "/y",
     },
   ];
 
   return (
-    <main className="flex-col max-w-full min-h-full max-h-screen bg-blue-500">
+    <main className="flex-col max-w-full min-h-full max-h-screen bg-gradient-to-r from-blue-600 to-blue-500">
       <div className="flex-col max-h-screen h-screen overflow-hidden">
         <div className="flex min-w-scree h-1/2">
           {todoWindows.map((todoWindowProps) => (
             <TodoWindow key={todoWindowProps.header} {...todoWindowProps} />
           ))}
         </div>
-        <div className="flex justify-center bg-blue-500">
+        <div className="flex justify-center">
           <input
             onKeyDown={handleKeyDown}
             className="outline-none bg-blue-400 my-2 rounded-lg px-2 py-1.5 w-1/2 max-h-10 items-center content-center"
