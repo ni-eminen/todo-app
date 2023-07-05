@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import {
   createNote,
+  deleteNote,
   getNotes as fetchNotes,
   patchNote,
 } from "./services/dbService";
@@ -12,40 +13,64 @@ import { timestampIsYesterday } from "./utils/isYesterday";
 const NoteComponent = ({
   note,
   onSelect,
+  onDelete,
 }: {
   note: Note;
   onSelect: () => void;
+  onDelete: () => void;
 }) => {
   const [bounceEffect, setBounceEffect] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const onSelectWithDeleting = () => {
+    !deleting && onSelect();
+  };
 
   return (
     <div
-      className={`flex items-center my-2 first-letter bg-blue-500 rounded p-2 ${
+      className={`flex justify-between items-center my-2 first-letter bg-blue-500 rounded p-2 ${
         bounceEffect && "animate-bounce"
       } ${note.selected ? "bg-gradient-to-r from-blue-600 to-blue-500" : ""}`}
       onAnimationEnd={() => setBounceEffect(false)}
       onClick={() => {
         setBounceEffect(true);
-        onSelect();
+        onSelectWithDeleting();
       }}
+      key={note.id}
     >
-      <input
-        checked={note.selected}
-        onChange={onSelect}
-        id={note.id}
-        type="checkbox"
-        value={note.id}
-        className="w-8 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
-      />
-      <label
-        onClick={onSelect}
-        htmlFor="default-checkbox"
-        className={`ml-2 text-sm font-medium text-white select-none ${
-          note.selected ? "line-through text-blue-300" : ""
-        }`}
+      <div className="flex justify-between items-center my-2 first-letter">
+        <input
+          checked={note.selected}
+          onChange={() => {
+            onSelectWithDeleting();
+          }}
+          id={note.id}
+          type="checkbox"
+          value={note.id}
+          className="h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+        />
+        <label
+          onClick={() => {
+            onSelectWithDeleting();
+          }}
+          htmlFor="default-checkbox"
+          className={`ml-2 text-sm font-medium text-white select-none ${
+            note.selected ? "line-through text-blue-300" : ""
+          }`}
+        >
+          {note.body}
+        </label>
+      </div>
+      <div
+        onMouseEnter={() => setDeleting(true)}
+        onMouseLeave={() => setDeleting(false)}
+        onClick={() => {
+          onDelete();
+        }}
+        className="justify-items-center content-center align-middle select-none px-1"
       >
-        {note.body}
-      </label>
+        <p className="displ">✕</p>
+      </div>
     </div>
   );
 };
@@ -54,6 +79,7 @@ const TodoWindow = ({
   header,
   notes,
   onSelect,
+  onDelete,
   shorthand,
 }: TodoWindowProps) => {
   return (
@@ -69,6 +95,7 @@ const TodoWindow = ({
           <NoteComponent
             key={note.id}
             onSelect={() => onSelect(note)}
+            onDelete={() => onDelete(note)}
             note={note}
           />
         ))}
@@ -89,13 +116,12 @@ export default function Home() {
     );
   }, [notes]);
 
-  useEffect(() => {
-    const checkTimestamps = setInterval(() => {
-      updateNotes();
-      console.log(notes);
-    }, 1000);
-    return () => clearInterval(checkTimestamps);
-  }, [notes, updateNotes]);
+  // useEffect(() => {
+  //   const checkTimestamps = setInterval(() => {
+  //     updateNotes();
+  //   }, 1000);
+  //   return () => clearInterval(checkTimestamps);
+  // }, [notes, updateNotes]);
 
   useEffect(() => {
     const loadNotes = async () => {
@@ -129,66 +155,81 @@ export default function Home() {
     }
   };
 
-  const removeNote = (note: Note) => {
-    setNotes(notes.filter((x) => x.id !== note.id));
-  };
-
-  const toggleNote = (selectedNote: Note) => {
-    setNotes(
-      notes.map((note) => {
-        const updatedNote =
-          note.id == selectedNote.id
-            ? { ...note, selected: !note.selected }
-            : note;
-        return updatedNote;
-      })
-    );
-    patchNote({ ...selectedNote, selected: !selectedNote.selected });
-  };
-
-  const getNotes = useCallback(
-    (category: string) => {
-      return notes.filter(
-        (note) =>
-          note.category == category && !timestampIsYesterday(note.timestamp)
-      );
+  const removeNote = useCallback(
+    (note: Note) => {
+      console.log("remove note called");
+      deleteNote(note);
+      const newNotes = notes.filter((x) => {
+        return x.id !== note.id;
+      });
+      console.log(newNotes.length);
+      setNotes(newNotes);
     },
     [notes]
   );
 
-  const useNotes = (fn: () => Note[]) => {
-    const notes = useMemo(() => fn(), [fn]);
-    return notes;
-  };
+  const toggleNote = useCallback(
+    (selectedNote: Note) => {
+      setNotes(
+        notes.map((note) => {
+          const updatedNote =
+            note.id == selectedNote.id
+              ? { ...note, selected: !note.selected }
+              : note;
+          return updatedNote;
+        })
+      );
+      patchNote({ ...selectedNote, selected: !selectedNote.selected });
+    },
+    [notes]
+  );
 
-  const todoWindows: TodoWindowProps[] = [
-    {
-      onSelect: toggleNote,
-      notes: useNotes(() => getNotes("/t")),
-      header: "Todo:",
-      shorthand: "/t",
+  const getNotes = useCallback(
+    (category: string) => {
+      const notesByCategory = notes.filter(
+        (note) =>
+          note.category == category && !timestampIsYesterday(note.timestamp)
+      );
+      return notesByCategory.sort((a, b) => {
+        return a.timestamp < b.timestamp ? -1 : 1;
+      });
     },
-    {
-      onSelect: toggleNote,
-      notes: useNotes(() => getNotes("/d")),
-      header: "Daily:",
-      shorthand: "/d",
-    },
-    {
-      onSelect: toggleNote,
-      notes: useNotes(() => getNotes("/g")),
-      header: "General:",
-      shorthand: "/g",
-    },
-    {
-      onSelect: toggleNote,
-      notes: useNotes(() =>
-        notes.filter((note) => timestampIsYesterday(note.timestamp))
-      ),
-      header: "Yesterday:",
-      shorthand: "/y",
-    },
-  ];
+    [notes]
+  );
+
+  const todoWindows: TodoWindowProps[] = useMemo(
+    () => [
+      {
+        onSelect: toggleNote,
+        onDelete: removeNote,
+        notes: getNotes("/t"),
+        header: "Todo:",
+        shorthand: "/t",
+      },
+      {
+        onSelect: toggleNote,
+        onDelete: removeNote,
+        notes: getNotes("/d"),
+        header: "Daily:",
+        shorthand: "/d",
+      },
+      {
+        onSelect: toggleNote,
+        onDelete: removeNote,
+        notes: getNotes("/g"),
+        header: "General:",
+        shorthand: "/g",
+      },
+      {
+        onSelect: toggleNote,
+        onDelete: removeNote,
+        notes: notes.filter((note) => timestampIsYesterday(note.timestamp)),
+        header: "Yesterday:",
+        shorthand: "/y",
+      },
+    ],
+    [getNotes, notes, removeNote, toggleNote]
+  );
 
   return (
     <main className="flex-col max-w-full min-h-full max-h-screen bg-gradient-to-r from-blue-600 to-blue-500">

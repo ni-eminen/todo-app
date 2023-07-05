@@ -16,3 +16,9 @@ export const patchNote = async (patchedNote: Note): Promise<Note> => {
     const response = await axios.patch(`http://localhost:8080/notes/${patchedNote.id}`, patchedNote)
     return response.data
 }
+
+export const deleteNote = async (note: Note) => {
+    const response = await axios.delete(`http://localhost:8080/notes/${note.id}`)
+    console.log(response.data)
+    return response.data
+}
