@@ -8,19 +8,22 @@ import {
   patchNote,
 } from "./services/dbService";
 import { Note, TodoWindowProps } from "./types";
-import { timestampIsYesterday } from "./utils/isYesterday";
+import { timestampIsOlderThan } from "./utils/timestampIsOlderThan";
 
 const NoteComponent = ({
   note,
   onSelect,
   onDelete,
+  onArchive,
 }: {
   note: Note;
   onSelect: () => void;
   onDelete: () => void;
+  onArchive: () => void;
 }) => {
   const [bounceEffect, setBounceEffect] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deleteVisible, setDeleteVisible] = useState(false);
 
   const onSelectWithDeleting = () => {
     !deleting && onSelect();
@@ -36,6 +39,8 @@ const NoteComponent = ({
         setBounceEffect(true);
         onSelectWithDeleting();
       }}
+      onMouseEnter={() => setDeleteVisible(true)}
+      onMouseLeave={() => setDeleteVisible(false)}
       key={note.id}
     >
       <div className="flex justify-between items-center my-2 first-letter">
@@ -62,14 +67,30 @@ const NoteComponent = ({
         </label>
       </div>
       <div
-        onMouseEnter={() => setDeleting(true)}
-        onMouseLeave={() => setDeleting(false)}
-        onClick={() => {
-          onDelete();
-        }}
-        className="justify-items-center content-center align-middle select-none px-1"
+        className={`${
+          deleteVisible ? "" : "hidden"
+        } flex justify-between items-center`}
       >
-        <p className="displ">✕</p>
+        <div
+          onMouseEnter={() => setDeleting(true)}
+          onMouseLeave={() => setDeleting(false)}
+          onClick={() => {
+            onArchive();
+          }}
+          className={`justify-items-center content-center align-middle select-none rounded-md hover:bg-blue-400 overflow-hidden p-2 mx-1`}
+        >
+          <p className="text-center justify-center">a</p>
+        </div>
+        <div
+          onMouseEnter={() => setDeleting(true)}
+          onMouseLeave={() => setDeleting(false)}
+          onClick={() => {
+            onDelete();
+          }}
+          className={`justify-items-center content-center align-middle select-none rounded-md hover:bg-blue-400 overflow-hidde p-2`}
+        >
+          <p className="text-center">✕</p>
+        </div>
       </div>
     </div>
   );
@@ -80,26 +101,55 @@ const TodoWindow = ({
   notes,
   onSelect,
   onDelete,
+  onArchive,
   shorthand,
 }: TodoWindowProps) => {
   return (
-    <div className="bg-blue-400 overflow-scroll w-1/2 rounded-lg m-3 p-5">
-      <div className="flex justify-between">
+    <div className="flex flex-col no-scrollbar bg-blue-400 overflow-hidden w-1/2 rounded-lg m-3 p-5">
+      <div className="flex flex-none basis-1 justify-between">
         <h1 className="text-2xl mb-2 select-none inline">{header}</h1>
         <h1 className="bg-blue-500 rounded px-2 py-1 text-2xl mb-2 select-none inline justify-end align-bottom">
           {shorthand}
         </h1>{" "}
       </div>
-      <div className="mb-4">
-        {notes.map((note: Note) => (
-          <NoteComponent
-            key={note.id}
-            onSelect={() => onSelect(note)}
-            onDelete={() => onDelete(note)}
-            note={note}
-          />
-        ))}
+      <div className="flex- bg-blue-400 overflow-scroll rounded-lg no-scrollbar">
+        <div className="mb-4">
+          {notes.map((note: Note) => (
+            <NoteComponent
+              key={note.id}
+              onSelect={() => onSelect(note)}
+              onDelete={() => onDelete(note)}
+              onArchive={() => onArchive(note)}
+              note={note}
+            />
+          ))}
+        </div>
       </div>
+    </div>
+  );
+};
+
+const ArchiveButton = ({
+  onClick,
+  toggled,
+}: {
+  onClick: () => void;
+  toggled: boolean;
+}) => {
+  const [bounceEffect, setBounceEffect] = useState(false);
+
+  return (
+    <div
+      onClick={() => {
+        setBounceEffect(true);
+        onClick();
+      }}
+      onAnimationEnd={() => setBounceEffect(false)}
+      className={`outline-none select-none my-2 rounded-lg px-2 py-1.5 max-h-10 ml-1 items-center content-center ${
+        toggled ? "bg-blue-500" : "bg-blue-400"
+      } ${bounceEffect && "animate-bounce"}`}
+    >
+      <p>a</p>
     </div>
   );
 };
@@ -107,21 +157,19 @@ const TodoWindow = ({
 export default function Home() {
   const [input, setInput] = useState("");
   const [notes, setNotes] = useState<Note[]>([]);
+  const [showArchived, setShowArchived] = useState(false);
 
   const updateNotes = useCallback(() => {
     setNotes(
       notes.map((note) => {
-        return { ...note, isYesterday: timestampIsYesterday(note.timestamp) };
+        return {
+          ...note,
+          isYesterday:
+            timestampIsOlderThan(note.selectedTimestamp) && !note.selected,
+        };
       })
     );
   }, [notes]);
-
-  // useEffect(() => {
-  //   const checkTimestamps = setInterval(() => {
-  //     updateNotes();
-  //   }, 1000);
-  //   return () => clearInterval(checkTimestamps);
-  // }, [notes, updateNotes]);
 
   useEffect(() => {
     const loadNotes = async () => {
@@ -141,6 +189,8 @@ export default function Home() {
       timestamp: Date.now(),
       category: code,
       selected: false,
+      selectedTimestamp: 1,
+      archived: false,
     };
 
     createNote(newNote);
@@ -157,29 +207,45 @@ export default function Home() {
 
   const removeNote = useCallback(
     (note: Note) => {
-      console.log("remove note called");
       deleteNote(note);
       const newNotes = notes.filter((x) => {
         return x.id !== note.id;
       });
-      console.log(newNotes.length);
       setNotes(newNotes);
     },
     [notes]
   );
 
-  const toggleNote = useCallback(
-    (selectedNote: Note) => {
+  const toggleArchiveNote = useCallback(
+    (noteToToggle: Note) => {
+      const toggledNote = {
+        ...noteToToggle,
+        archived: !noteToToggle.archived,
+      };
+
+      patchNote(toggledNote);
+
       setNotes(
-        notes.map((note) => {
-          const updatedNote =
-            note.id == selectedNote.id
-              ? { ...note, selected: !note.selected }
-              : note;
-          return updatedNote;
-        })
+        notes.map((note) => (note.id === noteToToggle.id ? toggledNote : note))
       );
-      patchNote({ ...selectedNote, selected: !selectedNote.selected });
+    },
+    [notes]
+  );
+
+  const toggleFinishedNote = useCallback(
+    (selectedNote: Note) => {
+      const newSelectedTimestamp = Date.now();
+      const updatedNote = {
+        ...selectedNote,
+        selectedTimestamp: newSelectedTimestamp,
+        selected: !selectedNote.selected,
+      };
+
+      setNotes(
+        notes.map((note) => (note.id === selectedNote.id ? updatedNote : note))
+      );
+
+      patchNote(updatedNote);
     },
     [notes]
   );
@@ -188,47 +254,56 @@ export default function Home() {
     (category: string) => {
       const notesByCategory = notes.filter(
         (note) =>
-          note.category == category && !timestampIsYesterday(note.timestamp)
+          note.category == category &&
+          (!timestampIsOlderThan(note.selectedTimestamp) || !note.selected) &&
+          note.archived === showArchived
       );
       return notesByCategory.sort((a, b) => {
         return a.timestamp < b.timestamp ? -1 : 1;
       });
     },
-    [notes]
+    [notes, showArchived]
   );
 
   const todoWindows: TodoWindowProps[] = useMemo(
     () => [
       {
-        onSelect: toggleNote,
+        onSelect: toggleFinishedNote,
         onDelete: removeNote,
         notes: getNotes("/t"),
         header: "Todo:",
         shorthand: "/t",
+        onArchive: toggleArchiveNote,
       },
       {
-        onSelect: toggleNote,
+        onSelect: toggleFinishedNote,
         onDelete: removeNote,
         notes: getNotes("/d"),
         header: "Daily:",
         shorthand: "/d",
+        onArchive: toggleArchiveNote,
       },
       {
-        onSelect: toggleNote,
+        onSelect: toggleFinishedNote,
         onDelete: removeNote,
         notes: getNotes("/g"),
         header: "General:",
         shorthand: "/g",
+        onArchive: toggleArchiveNote,
       },
       {
-        onSelect: toggleNote,
+        onSelect: toggleFinishedNote,
         onDelete: removeNote,
-        notes: notes.filter((note) => timestampIsYesterday(note.timestamp)),
-        header: "Yesterday:",
+        notes: notes.filter(
+          (note) =>
+            timestampIsOlderThan(note.selectedTimestamp) && note.selected
+        ),
+        header: "Past:",
         shorthand: "/y",
+        onArchive: toggleArchiveNote,
       },
     ],
-    [getNotes, notes, removeNote, toggleNote]
+    [getNotes, notes, removeNote, toggleArchiveNote, toggleFinishedNote]
   );
 
   return (
@@ -246,6 +321,10 @@ export default function Home() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             type="text"
+          />
+          <ArchiveButton
+            onClick={() => setShowArchived(!showArchived)}
+            toggled={showArchived}
           />
         </div>
       </div>
