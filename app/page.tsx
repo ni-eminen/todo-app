@@ -296,14 +296,23 @@ export default function Home() {
         onDelete: removeNote,
         notes: notes.filter(
           (note) =>
-            timestampIsOlderThan(note.selectedTimestamp) && note.selected
+            timestampIsOlderThan(note.selectedTimestamp) &&
+            note.selected &&
+            note.archived === showArchived
         ),
         header: "Past:",
         shorthand: "/y",
         onArchive: toggleArchiveNote,
       },
     ],
-    [getNotes, notes, removeNote, toggleArchiveNote, toggleFinishedNote]
+    [
+      getNotes,
+      notes,
+      removeNote,
+      showArchived,
+      toggleArchiveNote,
+      toggleFinishedNote,
+    ]
   );
 
   return (
